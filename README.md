@@ -33,7 +33,7 @@ You can run the application in two ways:
 ---
 
 ## 📁 Project Structure
-zjvmjk
+
 ```text
 BMI_Calculator/
 │
