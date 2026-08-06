@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMI Calculator & Health Tracker</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js for interactive web line graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand">
+                <span class="brand-icon">⚖️</span>
+                <div class="brand-text">
+                    <h1>BMI Calculator & Health Tracker</h1>
+                    <p class="subtitle">Monitor your body mass index and health trends over time</p>
+                </div>
+            </div>
+            <div class="live-clock" id="liveClock">Loading clock...</div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-container">
+        
+        <!-- Left Column: Input Form & Results -->
+        <section class="left-panel">
+            
+            <!-- User Input Form Card -->
+            <div class="card form-card">
+                <div class="card-header">
+                    <h2>👤 User Details</h2>
+                </div>
+                <form id="bmiForm" onsubmit="event.preventDefault(); handleCalculate();">
+                    
+                    <div class="form-group">
+                        <label for="usernameInput">User Name</label>
+                        <div class="input-with-select">
+                            <input type="text" id="usernameInput" placeholder="Enter or select username" required autocomplete="off" list="userList">
+                            <datalist id="userList"></datalist>
+                        </div>
+                        <small class="help-text">Type a new username or select an existing user</small>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="weightInput">Weight (kg)</label>
+                            <input type="number" step="0.1" id="weightInput" placeholder="e.g. 70.5" required min="1" max="500">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="heightInput">Height (m)</label>
+                            <input type="number" step="0.01" id="heightInput" placeholder="e.g. 1.75" required min="0.4" max="3.0">
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="button-grid">
+                        <button type="button" class="btn btn-primary" onclick="handleCalculate()">🧮 Calculate BMI</button>
+                        <button type="button" class="btn btn-success" onclick="handleSave()">💾 Save Record</button>
+                        <button type="button" class="btn btn-info" onclick="handleFetchHistory()">📜 View History</button>
+                        <button type="button" class="btn btn-purple" onclick="handleShowGraph()">📈 Show Trend Graph</button>
+                        <button type="button" class="btn btn-secondary" onclick="handleClear()">🧹 Clear Fields</button>
+                    </div>
+
+                </form>
+            </div>
+
+            <!-- Calculation Result Card -->
+            <div class="card result-card" id="resultCard">
+                <div class="card-header">
+                    <span class="tag">CALCULATION RESULT</span>
+                </div>
+                <div class="result-body">
+                    <div class="bmi-value-display" id="bmiValueDisplay">--.--</div>
+                    <div class="category-badge" id="categoryBadge">Enter details and click 'Calculate'</div>
+                    <p class="health-message" id="healthMessage">Your personalized health recommendation will appear here.</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Right Column: Visualization & History -->
+        <section class="right-panel">
+            
+            <!-- Graph Card -->
+            <div class="card chart-card">
+                <div class="card-header">
+                    <h2>📈 BMI Trend Analysis</h2>
+                    <span class="user-pill" id="activeUserPill">Select a user to view trends</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="bmiChart"></canvas>
+                </div>
+            </div>
+
+            <!-- History Table Card -->
+            <div class="card history-card">
+                <div class="card-header space-between">
+                    <h2>📜 User History Table</h2>
+                    <div class="table-actions">
+                        <button class="btn-sm btn-outline" onclick="handleFetchHistory()">🔄 Refresh</button>
+                        <button class="btn-sm btn-danger-outline" onclick="handleClearUserHistory()">⚠️ Clear All User History</button>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="history-table" id="historyTable">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Weight (kg)</th>
+                                <th>Height (m)</th>
+                                <th>BMI</th>
+                                <th>Category</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <tr>
+                                <td colspan="6" class="empty-state">No user history loaded. Enter a username and click 'View History'.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+        <p>BMI Calculator & Health Tracker &bull; Running on Localhost (http://localhost:5000/)</p>
+    </footer>
+
+    <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
