@@ -1,11 +1,23 @@
 /**
  * BMI Calculator & Health Tracker - Frontend Logic
- * Interactive client-side JavaScript handling API calls, live clock,
- * Chart.js visualization, dynamic history updates, and DOM interactions.
+ * Interactive client-side JavaScript handling single & multi-user API calls,
+ * Chart.js multi-dataset visualization (Overlapped step-by-step entry index),
+ * live clock, dynamic history updates, and user comparison panels.
  */
 
 let bmiChart = null;
 let lastCalculatedData = null;
+
+const USER_COLORS = [
+    '#2563EB', // Royal Blue
+    '#16A34A', // Emerald Green
+    '#EA580C', // Orange
+    '#9333EA', // Purple
+    '#0284C7', // Sky Blue
+    '#DC2626', // Crimson Red
+    '#059669', // Teal
+    '#D97706'  // Amber
+];
 
 // Initialize on page load
 document.addEventListener("DOMContentLoaded", () => {
@@ -36,18 +48,45 @@ function initClock() {
 }
 
 /**
- * Fetches distinct users from database and fills datalist auto-suggest dropdown.
+ * Fetches distinct users from database and fills datalist & multi-user checkboxes.
  */
 async function fetchUserList() {
     try {
         const res = await fetch("/api/users");
         const json = await res.json();
         if (json.success && json.users) {
+            const users = json.users;
+            
             const datalist = document.getElementById("userList");
-            datalist.innerHTML = json.users.map(u => `<option value="${escapeHtml(u)}">`).join("");
+            datalist.innerHTML = users.map(u => `<option value="${escapeHtml(u)}">`).join("");
+
+            const checkContainer = document.getElementById("userCheckboxes");
+            if (users.length === 0) {
+                checkContainer.innerHTML = `<small class="help-text">No users in database yet.</small>`;
+            } else {
+                checkContainer.innerHTML = users.map((u, i) => `
+                    <label class="user-checkbox-item">
+                        <input type="checkbox" name="multiUserCheck" value="${escapeHtml(u)}" ${i < 3 ? 'checked' : ''}>
+                        <span>${escapeHtml(u)}</span>
+                    </label>
+                `).join("");
+            }
         }
     } catch (e) {
         console.error("Failed to load user list:", e);
+    }
+}
+
+/**
+ * Toggles visibility of multi-user comparison panel.
+ */
+function toggleMultiUserPanel() {
+    const panel = document.getElementById("multiUserPanel");
+    if (panel.style.display === "none" || !panel.style.display) {
+        panel.style.display = "block";
+        fetchUserList();
+    } else {
+        panel.style.display = "none";
     }
 }
 
@@ -79,7 +118,6 @@ async function handleCalculate() {
         const data = json.data;
         lastCalculatedData = data;
 
-        // Update UI Result Card
         const bmiDisplay = document.getElementById("bmiValueDisplay");
         const badge = document.getElementById("categoryBadge");
         const message = document.getElementById("healthMessage");
@@ -93,7 +131,6 @@ async function handleCalculate() {
 
         message.textContent = data.message;
 
-        // Auto fetch history for this user
         handleFetchHistory(false);
 
     } catch (e) {
@@ -106,7 +143,6 @@ async function handleCalculate() {
  */
 async function handleSave() {
     if (!lastCalculatedData) {
-        // Trigger calculation if not done yet
         await handleCalculate();
         if (!lastCalculatedData) return;
     }
@@ -134,7 +170,7 @@ async function handleSave() {
 }
 
 /**
- * Fetches user history and updates history table and Chart.js graph.
+ * Fetches single user history and updates history table & graph.
  */
 async function handleFetchHistory(showAlertIfEmpty = true) {
     const username = document.getElementById("usernameInput").value.trim();
@@ -156,7 +192,7 @@ async function handleFetchHistory(showAlertIfEmpty = true) {
 
         const records = json.records || [];
         renderHistoryTable(records);
-        renderChart(username, records);
+        renderSingleUserChart(username, records);
 
         if (records.length === 0 && showAlertIfEmpty) {
             alert(`No history records found for user '${username}'.`);
@@ -164,6 +200,38 @@ async function handleFetchHistory(showAlertIfEmpty = true) {
 
     } catch (e) {
         console.error("Failed to fetch history:", e);
+    }
+}
+
+/**
+ * Fetches and plots multi-user comparison data (Overlapped Step-by-Step Entry Index).
+ */
+async function handleCompareSelectedUsers() {
+    const checked = Array.from(document.querySelectorAll("input[name='multiUserCheck']:checked")).map(cb => cb.value);
+    if (checked.length === 0) {
+        alert("Please select at least 1 user to plot comparison.");
+        return;
+    }
+
+    document.getElementById("activeUserPill").textContent = `Overlapped Comparison: ${checked.join(" vs ")}`;
+
+    try {
+        const res = await fetch("/api/multi-history", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usernames: checked })
+        });
+        const json = await res.json();
+
+        if (!json.success) {
+            alert("Comparison Error: " + json.error);
+            return;
+        }
+
+        renderMultiUserChart(json.results);
+
+    } catch (e) {
+        alert("Error generating multi-user graph: " + e.message);
     }
 }
 
@@ -256,48 +324,33 @@ function handleClear() {
 
     lastCalculatedData = null;
     document.getElementById("historyTableBody").innerHTML = `<tr><td colspan="6" class="empty-state">No user history loaded.</td></tr>`;
-    document.getElementById("activeUserPill").textContent = "Select a user to view trends";
+    document.getElementById("activeUserPill").textContent = "Select user(s) to view trends";
 
     if (bmiChart) {
         bmiChart.destroy();
         bmiChart = null;
+        initChart();
     }
 }
 
-/**
- * Trigger show graph explicitly.
- */
 function handleShowGraph() {
     handleFetchHistory(true);
 }
 
-/**
- * Initializes empty Chart.js line plot.
- */
 function initChart() {
     const ctx = document.getElementById("bmiChart").getContext("2d");
     bmiChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: [],
-            datasets: [{
-                label: 'BMI Trend',
-                data: [],
-                borderColor: '#2563EB',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                borderWidth: 2.5,
-                pointRadius: 5,
-                pointHoverRadius: 7,
-                fill: true,
-                tension: 0.2
-            }]
+            datasets: []
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: true, position: 'top' },
-                tooltip: { callbacks: { label: ctx => `BMI: ${ctx.parsed.y}` } }
+                tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}` } }
             },
             scales: {
                 y: {
@@ -306,31 +359,78 @@ function initChart() {
                     title: { display: true, text: 'BMI Value' }
                 },
                 x: {
-                    title: { display: true, text: 'Date & Time' }
+                    title: { display: true, text: 'Measurement Step / Entry Number' }
                 }
             }
         }
     });
 }
 
-/**
- * Updates Chart.js dataset with fresh user history records.
- */
-function renderChart(username, records) {
+function renderSingleUserChart(username, records) {
     if (!bmiChart) initChart();
 
-    const labels = records.map(r => r.date);
+    const labels = records.map((r, idx) => `Entry #${idx + 1} (${r.date.split(" ")[0]})`);
     const dataPoints = records.map(r => r.bmi);
 
     bmiChart.data.labels = labels;
-    bmiChart.data.datasets[0].label = `${username}'s BMI Progress`;
-    bmiChart.data.datasets[0].data = dataPoints;
+    bmiChart.data.datasets = [{
+        label: `${username}'s BMI`,
+        data: dataPoints,
+        borderColor: '#2563EB',
+        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+        borderWidth: 2.5,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        fill: true,
+        tension: 0.2
+    }];
+
     bmiChart.update();
 }
 
 /**
- * Helper to get hex color code for BMI category.
+ * Renders multi-user comparative chart datasets OVERLAPPED by entry number (Entry #1, #2, #3...).
  */
+function renderMultiUserChart(userResults) {
+    if (!bmiChart) initChart();
+
+    // Determine maximum number of entries across all users
+    let maxEntries = 0;
+    Object.values(userResults).forEach(records => {
+        if (records.length > maxEntries) maxEntries = records.length;
+    });
+
+    const labels = Array.from({ length: maxEntries }, (_, i) => `Entry #${i + 1}`);
+
+    const datasets = [];
+    let colorIdx = 0;
+
+    Object.entries(userResults).forEach(([username, records]) => {
+        if (records.length === 0) return;
+
+        const dataPoints = records.map(r => r.bmi);
+        const color = USER_COLORS[colorIdx % USER_COLORS.length];
+        colorIdx++;
+
+        datasets.push({
+            label: username,
+            data: dataPoints,
+            borderColor: color,
+            backgroundColor: color,
+            borderWidth: 2.5,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            fill: false,
+            spanGaps: true,
+            tension: 0.2
+        });
+    });
+
+    bmiChart.data.labels = labels;
+    bmiChart.data.datasets = datasets;
+    bmiChart.update();
+}
+
 function getCategoryColor(category) {
     switch (category.toLowerCase()) {
         case "underweight": return "#2563EB";
@@ -341,9 +441,6 @@ function getCategoryColor(category) {
     }
 }
 
-/**
- * Helper to escape HTML characters.
- */
 function escapeHtml(str) {
     if (!str) return "";
     return String(str)

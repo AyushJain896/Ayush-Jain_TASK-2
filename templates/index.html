@@ -22,7 +22,7 @@
                 <span class="brand-icon">⚖️</span>
                 <div class="brand-text">
                     <h1>BMI Calculator & Health Tracker</h1>
-                    <p class="subtitle">Monitor your body mass index and health trends over time</p>
+                    <p class="subtitle">Monitor your body mass index and multi-user health trends over time</p>
                 </div>
             </div>
             <div class="live-clock" id="liveClock">Loading clock...</div>
@@ -68,11 +68,25 @@
                         <button type="button" class="btn btn-primary" onclick="handleCalculate()">🧮 Calculate BMI</button>
                         <button type="button" class="btn btn-success" onclick="handleSave()">💾 Save Record</button>
                         <button type="button" class="btn btn-info" onclick="handleFetchHistory()">📜 View History</button>
-                        <button type="button" class="btn btn-purple" onclick="handleShowGraph()">📈 Show Trend Graph</button>
+                        <button type="button" class="btn btn-purple" onclick="handleShowGraph()">📈 Show User Graph</button>
+                        <button type="button" class="btn btn-warning" onclick="toggleMultiUserPanel()">👥 Compare 2-3 Users</button>
                         <button type="button" class="btn btn-secondary" onclick="handleClear()">🧹 Clear Fields</button>
                     </div>
 
                 </form>
+            </div>
+
+            <!-- Multi-User Comparison Selection Box (Toggleable) -->
+            <div class="card multi-user-panel" id="multiUserPanel" style="display: none;">
+                <div class="card-header">
+                    <h2>👥 Compare Multiple Users</h2>
+                    <span class="close-panel" onclick="toggleMultiUserPanel()">✖</span>
+                </div>
+                <p class="help-text" style="margin-bottom: 10px;">Select 2, 3, or more users to compare their BMI trends on the same chart:</p>
+                <div class="user-checkboxes" id="userCheckboxes">
+                    <small>Loading users...</small>
+                </div>
+                <button type="button" class="btn btn-purple" style="width: 100%; margin-top: 12px;" onclick="handleCompareSelectedUsers()">📊 Generate Comparison Graph</button>
             </div>
 
             <!-- Calculation Result Card -->
@@ -95,8 +109,8 @@
             <!-- Graph Card -->
             <div class="card chart-card">
                 <div class="card-header">
-                    <h2>📈 BMI Trend Analysis</h2>
-                    <span class="user-pill" id="activeUserPill">Select a user to view trends</span>
+                    <h2>📈 BMI Trend & Comparison Analysis</h2>
+                    <span class="user-pill" id="activeUserPill">Select user(s) to view trends</span>
                 </div>
                 <div class="chart-container">
                     <canvas id="bmiChart"></canvas>

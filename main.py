@@ -2,15 +2,16 @@
 BMI Calculator & Health Tracker - Main Application GUI
 =====================================================
 A modern, feature-rich Tkinter desktop application for calculating Body Mass Index (BMI),
-tracking historical health data with SQLite3, and visualizing trends with matplotlib.
+tracking historical health data with SQLite3, and visualizing single or multi-user trends with matplotlib.
 
 Features included:
 - Professional Tkinter GUI with custom theme colors
 - Live clock displaying date and time
 - Interactive input form with Combobox auto-suggestions for user names
-- Calculate, Save, View History, Show Graph, Clear, and Exit controls
+- Calculate, Save, View History, Single Graph, Multi-User Comparison Graph, Clear, and Exit controls
 - Color-coded BMI result presentation card with health advice
 - Secondary Treeview History window with record management
+- Multi-User Comparison Dialog (compare 2, 3, or more users together on one chart)
 - Hover tooltips on controls
 - Keyboard Enter key shortcut support
 - Responsive and resizable grid layout
@@ -34,7 +35,7 @@ from database import (
     clear_user_history,
     DEFAULT_DB_PATH
 )
-from graph import plot_bmi_trend
+from graph import plot_bmi_trend, plot_multi_user_bmi_trend
 
 
 class ToolTip:
@@ -52,12 +53,11 @@ class ToolTip:
         """Displays the tooltip floating window near the widget cursor position."""
         if self.tip_window or not self.text:
             return
-        # Calculate tooltip position relative to widget root coordinates
         x = self.widget.winfo_rootx() + 20
         y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
 
         self.tip_window = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(True)  # Remove window borders
+        tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
         tw.attributes("-topmost", True)
 
@@ -65,8 +65,8 @@ class ToolTip:
             tw,
             text=self.text,
             justify=tk.LEFT,
-            background="#0F172A",  # Dark slate background
-            foreground="#F8FAFC",  # White text
+            background="#0F172A",
+            foreground="#F8FAFC",
             relief=tk.SOLID,
             borderwidth=1,
             font=("Segoe UI", 9, "normal"),
@@ -81,6 +81,121 @@ class ToolTip:
         self.tip_window = None
         if tw:
             tw.destroy()
+
+
+class CompareUsersDialog(tk.Toplevel):
+    """
+    Secondary Toplevel dialog allowing users to select 2, 3, or more people
+    and plot their BMI progression together on the same graph.
+    """
+    def __init__(self, parent: tk.Tk, db_path: str = DEFAULT_DB_PATH):
+        super().__init__(parent)
+        self.parent = parent
+        self.db_path = db_path
+
+        self.title("Compare Multi-User BMI Trends")
+        self.geometry("420x450")
+        self.minsize(360, 400)
+        self.configure(bg="#F8FAFC")
+
+        self.transient(parent)
+        self.focus_set()
+
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        """Constructs the multi-select user dialog."""
+        header_frame = tk.Frame(self, bg="#0F172A", pady=12, padx=16)
+        header_frame.pack(fill=tk.X)
+
+        title_lbl = tk.Label(
+            header_frame,
+            text="👥 Select Users to Compare",
+            font=("Segoe UI", 12, "bold"),
+            bg="#0F172A",
+            fg="#F8FAFC"
+        )
+        title_lbl.pack(side=tk.LEFT)
+
+        info_lbl = tk.Label(
+            self,
+            text="Hold Ctrl / Shift to select 2, 3, or more users to plot on one graph:",
+            font=("Segoe UI", 9.5),
+            bg="#F8FAFC",
+            fg="#475569",
+            wraplength=380,
+            justify=tk.LEFT,
+            padx=16,
+            pady=10
+        )
+        info_lbl.pack(fill=tk.X)
+
+        # Listbox with multiselect
+        list_frame = tk.Frame(self, bg="#F8FAFC", padx=16)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.user_listbox = tk.Listbox(
+            list_frame,
+            selectmode=tk.MULTIPLE,
+            font=("Segoe UI", 10),
+            bd=1,
+            relief=tk.SOLID,
+            activestyle='none'
+        )
+        self.user_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        sb = ttk.Scrollbar(list_frame, orient="vertical", command=self.user_listbox.yview)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.user_listbox.config(yscrollcommand=sb.set)
+
+        # Populate users
+        users = get_all_users(self.db_path)
+        for u in users:
+            self.user_listbox.insert(tk.END, u)
+
+        # Action Buttons
+        btn_frame = tk.Frame(self, bg="#F8FAFC", pady=12, padx=16)
+        btn_frame.pack(fill=tk.X)
+
+        plot_btn = tk.Button(
+            btn_frame,
+            text="📊 Generate Comparison Graph",
+            font=("Segoe UI", 10, "bold"),
+            bg="#9333EA",
+            fg="white",
+            activebackground="#7E22CE",
+            activeforeground="white",
+            relief=tk.FLAT,
+            padx=14,
+            pady=6,
+            command=self.action_generate_graph
+        )
+        plot_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 6))
+
+        cancel_btn = tk.Button(
+            btn_frame,
+            text="Close",
+            font=("Segoe UI", 9.5),
+            bg="#64748B",
+            fg="white",
+            activebackground="#475569",
+            activeforeground="white",
+            relief=tk.FLAT,
+            padx=12,
+            pady=6,
+            command=self.destroy
+        )
+        cancel_btn.pack(side=tk.RIGHT)
+
+    def action_generate_graph(self) -> None:
+        """Collects selected usernames and calls plot_multi_user_bmi_trend."""
+        selected_indices = self.user_listbox.curselection()
+        if not selected_indices:
+            messagebox.showwarning("Selection Required", "Please select at least 2 users from the list to compare.", parent=self)
+            return
+
+        selected_users = [self.user_listbox.get(idx) for idx in selected_indices]
+        plot_multi_user_bmi_trend(selected_users, db_path=self.db_path)
 
 
 class HistoryWindow(tk.Toplevel):
@@ -98,7 +213,6 @@ class HistoryWindow(tk.Toplevel):
         self.minsize(650, 350)
         self.configure(bg="#F1F5F9")
 
-        # Make modal window relative to parent
         self.transient(parent)
         self.focus_set()
 
@@ -107,7 +221,6 @@ class HistoryWindow(tk.Toplevel):
 
     def _build_ui(self) -> None:
         """Constructs the Treeview UI elements and control buttons."""
-        # Header title frame
         header_frame = tk.Frame(self, bg="#1E293B", pady=12, padx=16)
         header_frame.pack(fill=tk.X)
 
@@ -120,15 +233,12 @@ class HistoryWindow(tk.Toplevel):
         )
         title_lbl.pack(side=tk.LEFT)
 
-        # Table Container Frame
         table_frame = ttk.Frame(self, padding=12)
         table_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Treeview Widget setup
         columns = ("id", "date", "weight", "height", "bmi", "category")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse")
 
-        # Define Column Headings
         self.tree.heading("id", text="Record ID")
         self.tree.heading("date", text="Date & Time")
         self.tree.heading("weight", text="Weight (kg)")
@@ -136,7 +246,6 @@ class HistoryWindow(tk.Toplevel):
         self.tree.heading("bmi", text="BMI Value")
         self.tree.heading("category", text="Category")
 
-        # Configure Column Widths & Alignments
         self.tree.column("id", width=70, anchor=tk.CENTER)
         self.tree.column("date", width=160, anchor=tk.CENTER)
         self.tree.column("weight", width=100, anchor=tk.CENTER)
@@ -144,7 +253,6 @@ class HistoryWindow(tk.Toplevel):
         self.tree.column("bmi", width=90, anchor=tk.CENTER)
         self.tree.column("category", width=130, anchor=tk.CENTER)
 
-        # Add Scrollbars
         vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -156,7 +264,6 @@ class HistoryWindow(tk.Toplevel):
         table_frame.columnconfigure(0, weight=1)
         table_frame.rowconfigure(0, weight=1)
 
-        # Action Buttons Frame
         btn_frame = tk.Frame(self, bg="#F1F5F9", pady=10, padx=12)
         btn_frame.pack(fill=tk.X)
 
@@ -174,7 +281,6 @@ class HistoryWindow(tk.Toplevel):
             command=self.load_data
         )
         refresh_btn.pack(side=tk.LEFT, padx=5)
-        ToolTip(refresh_btn, "Reload history data from database")
 
         delete_btn = tk.Button(
             btn_frame,
@@ -190,7 +296,6 @@ class HistoryWindow(tk.Toplevel):
             command=self.delete_selected
         )
         delete_btn.pack(side=tk.LEFT, padx=5)
-        ToolTip(delete_btn, "Delete the highlighted record entry")
 
         clear_btn = tk.Button(
             btn_frame,
@@ -206,7 +311,6 @@ class HistoryWindow(tk.Toplevel):
             command=self.clear_user_data
         )
         clear_btn.pack(side=tk.LEFT, padx=5)
-        ToolTip(clear_btn, "Delete all saved records for this user")
 
         close_btn = tk.Button(
             btn_frame,
@@ -225,7 +329,6 @@ class HistoryWindow(tk.Toplevel):
 
     def load_data(self) -> None:
         """Clears existing Treeview items and loads fresh user history from database."""
-        # Clear treeview items
         for item in self.tree.get_children():
             self.tree.delete(item)
 
@@ -296,43 +399,30 @@ class BMICalculatorApp(tk.Tk):
         super().__init__()
         self.db_path = db_path
 
-        # Ensure database is initialized
         init_db(self.db_path)
 
-        # Window Configurations
         self.title("BMI Calculator & Health Tracker")
-        self.geometry("680x700")
-        self.minsize(580, 620)
+        self.geometry("720x720")
+        self.minsize(620, 650)
         self.configure(bg="#F8FAFC")
 
-        # Custom Styling setup
         self._setup_styles()
-
-        # Build Main User Interface
         self._build_header()
         self._build_input_form()
         self._build_action_buttons()
         self._build_result_card()
         self._build_status_bar()
 
-        # Keyboard Shortcut Bindings
         self.bind("<Return>", lambda event: self.action_calculate())
 
-        # Start Clock Updates
         self._update_clock()
-
-        # Load initial user list
         self.refresh_user_dropdown()
-
-        # Active calculation cache
         self.last_calculated_data = None
 
     def _setup_styles(self) -> None:
         """Sets up ttk widget styling."""
         self.style = ttk.Style(self)
         self.style.theme_use("clam")
-
-        # Combobox style
         self.style.configure("TCombobox", padding=5, font=("Segoe UI", 10))
         self.style.configure("TFrame", background="#F8FAFC")
 
@@ -350,7 +440,6 @@ class BMICalculatorApp(tk.Tk):
         )
         title_label.pack(side=tk.LEFT)
 
-        # Live Clock Label
         self.clock_label = tk.Label(
             header_frame,
             text="",
@@ -361,13 +450,13 @@ class BMICalculatorApp(tk.Tk):
         self.clock_label.pack(side=tk.RIGHT)
 
     def _update_clock(self) -> None:
-        """Updates the current date and time label every 1000ms (1 second)."""
+        """Updates the current date and time label every 1000ms."""
         now_str = datetime.datetime.now().strftime("%a, %b %d, %Y  %I:%M:%S %p")
         self.clock_label.config(text=now_str)
         self.after(1000, self._update_clock)
 
     def _build_input_form(self) -> None:
-        """Constructs the user entry fields inside a card frame."""
+        """Constructs user entry fields inside a card frame."""
         form_card = tk.LabelFrame(
             self,
             text=" User Information ",
@@ -379,23 +468,20 @@ class BMICalculatorApp(tk.Tk):
             padx=20,
             pady=15
         )
-        form_card.pack(fill=tk.X, padx=20, pady=15)
+        form_card.pack(fill=tk.X, padx=20, pady=12)
 
-        # Grid configuration for form
         form_card.columnconfigure(1, weight=1)
 
-        # 1. User Name Entry with Combobox
         lbl_user = tk.Label(form_card, text="User Name:", font=("Segoe UI", 10, "bold"), bg="#FFFFFF", fg="#334155")
-        lbl_user.grid(row=0, column=0, sticky="w", pady=8)
+        lbl_user.grid(row=0, column=0, sticky="w", pady=6)
 
         self.user_var = tk.StringVar()
         self.user_combo = ttk.Combobox(form_card, textvariable=self.user_var, font=("Segoe UI", 10))
-        self.user_combo.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=8)
+        self.user_combo.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=6)
         ToolTip(self.user_combo, "Enter a new username or select an existing user profile")
 
-        # 2. Weight Entry
         lbl_weight = tk.Label(form_card, text="Weight (kg):", font=("Segoe UI", 10, "bold"), bg="#FFFFFF", fg="#334155")
-        lbl_weight.grid(row=1, column=0, sticky="w", pady=8)
+        lbl_weight.grid(row=1, column=0, sticky="w", pady=6)
 
         self.weight_var = tk.StringVar()
         self.weight_entry = tk.Entry(
@@ -407,12 +493,11 @@ class BMICalculatorApp(tk.Tk):
             highlightthickness=1,
             highlightcolor="#3B82F6"
         )
-        self.weight_entry.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=8)
+        self.weight_entry.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=6)
         ToolTip(self.weight_entry, "Enter your current body weight in kilograms (e.g. 70.5)")
 
-        # 3. Height Entry
         lbl_height = tk.Label(form_card, text="Height (m):", font=("Segoe UI", 10, "bold"), bg="#FFFFFF", fg="#334155")
-        lbl_height.grid(row=2, column=0, sticky="w", pady=8)
+        lbl_height.grid(row=2, column=0, sticky="w", pady=6)
 
         self.height_var = tk.StringVar()
         self.height_entry = tk.Entry(
@@ -424,7 +509,7 @@ class BMICalculatorApp(tk.Tk):
             highlightthickness=1,
             highlightcolor="#3B82F6"
         )
-        self.height_entry.grid(row=2, column=1, sticky="ew", padx=(10, 0), pady=8)
+        self.height_entry.grid(row=2, column=1, sticky="ew", padx=(10, 0), pady=6)
         ToolTip(self.height_entry, "Enter your height in meters (e.g. 1.75 for 175 cm)")
 
     def _build_action_buttons(self) -> None:
@@ -432,9 +517,9 @@ class BMICalculatorApp(tk.Tk):
         btn_container = tk.Frame(self, bg="#F8FAFC")
         btn_container.pack(fill=tk.X, padx=20, pady=5)
 
-        # Top row buttons
+        # Row 1 buttons
         row1 = tk.Frame(btn_container, bg="#F8FAFC")
-        row1.pack(fill=tk.X, pady=4)
+        row1.pack(fill=tk.X, pady=3)
         row1.columnconfigure((0, 1, 2), weight=1)
 
         btn_calc = tk.Button(
@@ -446,10 +531,10 @@ class BMICalculatorApp(tk.Tk):
             activebackground="#1D4ED8",
             activeforeground="white",
             relief=tk.FLAT,
-            pady=8,
+            pady=7,
             command=self.action_calculate
         )
-        btn_calc.grid(row=0, column=0, sticky="ew", padx=4)
+        btn_calc.grid(row=0, column=0, sticky="ew", padx=3)
         ToolTip(btn_calc, "Calculate BMI and category (Shortcut: Press Enter)")
 
         btn_save = tk.Button(
@@ -461,10 +546,10 @@ class BMICalculatorApp(tk.Tk):
             activebackground="#15803D",
             activeforeground="white",
             relief=tk.FLAT,
-            pady=8,
+            pady=7,
             command=self.action_save
         )
-        btn_save.grid(row=0, column=1, sticky="ew", padx=4)
+        btn_save.grid(row=0, column=1, sticky="ew", padx=3)
         ToolTip(btn_save, "Save the calculated BMI entry into SQLite database")
 
         btn_history = tk.Button(
@@ -476,64 +561,79 @@ class BMICalculatorApp(tk.Tk):
             activebackground="#0369A1",
             activeforeground="white",
             relief=tk.FLAT,
-            pady=8,
+            pady=7,
             command=self.action_view_history
         )
-        btn_history.grid(row=0, column=2, sticky="ew", padx=4)
+        btn_history.grid(row=0, column=2, sticky="ew", padx=3)
         ToolTip(btn_history, "Open secondary window to view history table for selected user")
 
-        # Bottom row buttons
+        # Row 2 buttons (Single Graph, Compare 2-3 Users Graph, Clear, Exit)
         row2 = tk.Frame(btn_container, bg="#F8FAFC")
-        row2.pack(fill=tk.X, pady=4)
-        row2.columnconfigure((0, 1, 2), weight=1)
+        row2.pack(fill=tk.X, pady=3)
+        row2.columnconfigure((0, 1, 2, 3), weight=1)
 
         btn_graph = tk.Button(
             row2,
-            text="📈 Show BMI Graph",
-            font=("Segoe UI", 10, "bold"),
+            text="📈 User Graph",
+            font=("Segoe UI", 9.5, "bold"),
             bg="#9333EA",
             fg="white",
             activebackground="#7E22CE",
             activeforeground="white",
             relief=tk.FLAT,
-            pady=8,
+            pady=7,
             command=self.action_show_graph
         )
-        btn_graph.grid(row=0, column=0, sticky="ew", padx=4)
-        ToolTip(btn_graph, "Display visual progress trend line graph using matplotlib")
+        btn_graph.grid(row=0, column=0, sticky="ew", padx=3)
+        ToolTip(btn_graph, "Display visual progress trend line graph for active user")
+
+        btn_compare = tk.Button(
+            row2,
+            text="👥 Compare Users",
+            font=("Segoe UI", 9.5, "bold"),
+            bg="#D97706",
+            fg="white",
+            activebackground="#B45309",
+            activeforeground="white",
+            relief=tk.FLAT,
+            pady=7,
+            command=self.action_compare_users
+        )
+        btn_compare.grid(row=0, column=1, sticky="ew", padx=3)
+        ToolTip(btn_compare, "Compare BMI trend graph of 2, 3, or more users together")
 
         btn_clear = tk.Button(
             row2,
-            text="🧹 Clear Fields",
-            font=("Segoe UI", 10, "bold"),
+            text="🧹 Clear",
+            font=("Segoe UI", 9.5, "bold"),
             bg="#64748B",
             fg="white",
             activebackground="#475569",
             activeforeground="white",
             relief=tk.FLAT,
-            pady=8,
+            pady=7,
             command=self.action_clear
         )
-        btn_clear.grid(row=0, column=1, sticky="ew", padx=4)
+        btn_clear.grid(row=0, column=2, sticky="ew", padx=3)
         ToolTip(btn_clear, "Reset input fields and clear calculated results")
 
         btn_exit = tk.Button(
             row2,
-            text="🚪 Exit App",
-            font=("Segoe UI", 10, "bold"),
+            text="🚪 Exit",
+            font=("Segoe UI", 9.5, "bold"),
             bg="#DC2626",
             fg="white",
             activebackground="#B91C1C",
             activeforeground="white",
             relief=tk.FLAT,
-            pady=8,
+            pady=7,
             command=self.action_exit
         )
-        btn_exit.grid(row=0, column=2, sticky="ew", padx=4)
+        btn_exit.grid(row=0, column=3, sticky="ew", padx=3)
         ToolTip(btn_exit, "Safely close the application")
 
     def _build_result_card(self) -> None:
-        """Constructs the dynamic BMI result and health message card."""
+        """Constructs the dynamic BMI result card."""
         self.result_card = tk.Frame(
             self,
             bg="#FFFFFF",
@@ -544,7 +644,6 @@ class BMICalculatorApp(tk.Tk):
         )
         self.result_card.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
-        # Header tag label inside card
         card_header = tk.Label(
             self.result_card,
             text="CALCULATION RESULT",
@@ -554,7 +653,6 @@ class BMICalculatorApp(tk.Tk):
         )
         card_header.pack(anchor="w")
 
-        # Main numeric BMI display
         self.bmi_value_lbl = tk.Label(
             self.result_card,
             text="--.--",
@@ -564,7 +662,6 @@ class BMICalculatorApp(tk.Tk):
         )
         self.bmi_value_lbl.pack(pady=(5, 0))
 
-        # Category Badge Banner
         self.category_badge = tk.Label(
             self.result_card,
             text="Enter details and click 'Calculate BMI'",
@@ -576,20 +673,19 @@ class BMICalculatorApp(tk.Tk):
         )
         self.category_badge.pack(pady=8)
 
-        # Health Message Label
         self.message_lbl = tk.Label(
             self.result_card,
             text="Health recommendations will appear here after calculation.",
             font=("Segoe UI", 9, "italic"),
             bg="#FFFFFF",
             fg="#64748B",
-            wraplength=520,
+            wraplength=550,
             justify=tk.CENTER
         )
         self.message_lbl.pack(pady=(5, 10))
 
     def _build_status_bar(self) -> None:
-        """Bottom status bar indicating app readiness."""
+        """Bottom status bar."""
         self.status_bar = tk.Label(
             self,
             text=" Ready",
@@ -615,7 +711,7 @@ class BMICalculatorApp(tk.Tk):
     # -------------------------------------------------------------------------
 
     def action_calculate(self) -> Optional[dict]:
-        """Handles BMI calculation logic and updates UI result card."""
+        """Handles BMI calculation logic."""
         is_valid, error_msg, username, weight, height = validate_inputs(
             self.user_var.get(),
             self.weight_var.get(),
@@ -627,11 +723,9 @@ class BMICalculatorApp(tk.Tk):
             self.status_bar.config(text=f" Error: {error_msg}")
             return None
 
-        # Calculate BMI
         bmi_val = calculate_bmi(weight, height)
         category_info = get_bmi_category(bmi_val)
 
-        # Update Result Card Display
         self.bmi_value_lbl.config(text=f"{bmi_val:.2f}", fg=category_info["color"])
         self.category_badge.config(
             text=f"Category: {category_info['category'].upper()}",
@@ -640,7 +734,6 @@ class BMICalculatorApp(tk.Tk):
         )
         self.message_lbl.config(text=category_info["message"], fg="#1E293B")
 
-        # Cache calculation result
         self.last_calculated_data = {
             "username": username,
             "weight": weight,
@@ -653,8 +746,7 @@ class BMICalculatorApp(tk.Tk):
         return self.last_calculated_data
 
     def action_save(self) -> None:
-        """Saves current BMI calculation to SQLite database."""
-        # Calculate if not already done or inputs changed
+        """Saves current BMI calculation to database."""
         data = self.action_calculate()
         if not data:
             return
@@ -700,8 +792,17 @@ class BMICalculatorApp(tk.Tk):
         plot_bmi_trend(username, db_path=self.db_path)
         self.status_bar.config(text=" Ready")
 
+    def action_compare_users(self) -> None:
+        """Opens multi-user selection dialog to compare 2, 3, or more users on one graph."""
+        users = get_all_users(self.db_path)
+        if not users:
+            messagebox.showinfo("No Users Found", "There are no users in the database yet to compare.")
+            return
+
+        CompareUsersDialog(self, db_path=self.db_path)
+
     def action_clear(self) -> None:
-        """Resets all input entry fields and restores result card state."""
+        """Resets all input fields."""
         self.user_var.set("")
         self.weight_var.set("")
         self.height_var.set("")
@@ -720,7 +821,7 @@ class BMICalculatorApp(tk.Tk):
         self.status_bar.config(text=" Fields cleared")
 
     def action_exit(self) -> None:
-        """Prompts user confirmation and closes application."""
+        """Closes application."""
         confirm = messagebox.askyesno("Exit Application", "Are you sure you want to exit?")
         if confirm:
             self.destroy()

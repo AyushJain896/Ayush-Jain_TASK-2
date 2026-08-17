@@ -1,6 +1,6 @@
 /* 
    BMI Calculator & Health Tracker - Custom Stylesheet
-   Modern, responsive design system with vibrant health colors
+   Modern, responsive design system with vibrant health colors & multi-user comparison
 */
 
 :root {
@@ -87,7 +87,7 @@ body {
     margin: 24px auto;
     padding: 0 20px;
     display: grid;
-    grid-template-columns: 420px 1fr;
+    grid-template-columns: 440px 1fr;
     gap: 24px;
 }
 
@@ -199,7 +199,8 @@ body {
 .btn-success { background: #16A34A; color: white; }
 .btn-info { background: #0284C7; color: white; }
 .btn-purple { background: #9333EA; color: white; }
-.btn-secondary { background: #64748B; color: white; grid-column: span 2; }
+.btn-warning { background: #D97706; color: white; }
+.btn-secondary { background: #64748B; color: white; }
 
 .btn:hover {
     filter: brightness(1.08);
@@ -225,8 +226,43 @@ body {
     color: #DC2626;
 }
 
-.btn-outline:hover, .btn-danger-outline:hover {
-    filter: brightness(0.95);
+/* Multi-User Panel Styles */
+.multi-user-panel {
+    border: 2px solid #F59E0B;
+    background: #FFFBEB;
+}
+
+.close-panel {
+    cursor: pointer;
+    font-weight: bold;
+    color: #92400E;
+    font-size: 1.1rem;
+}
+
+.user-checkboxes {
+    max-height: 140px;
+    overflow-y: auto;
+    border: 1px solid #FDE68A;
+    background: #FFFFFF;
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.user-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #1E293B;
+    cursor: pointer;
+}
+
+.user-checkbox-item input {
+    cursor: pointer;
+    accent-color: #9333EA;
 }
 
 /* Result Card */
@@ -280,7 +316,7 @@ body {
 /* Chart Canvas Container */
 .chart-container {
     position: relative;
-    height: 280px;
+    height: 320px;
     width: 100%;
 }
 
@@ -320,7 +356,6 @@ body {
     padding: 30px !important;
 }
 
-/* Delete Row Button */
 .btn-delete-row {
     background: #FEE2E2;
     color: #DC2626;

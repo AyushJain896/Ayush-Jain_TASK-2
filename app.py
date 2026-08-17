@@ -2,7 +2,7 @@
 BMI Calculator & Health Tracker - Localhost Web Application
 ============================================================
 A modern Flask web server providing a localhost web interface accessible at http://localhost:5000.
-Reuses the core business logic (bmi.py) and SQLite database layer (database.py).
+Supports single user operations and multi-user BMI comparison graphs on the same chart.
 """
 
 import os
@@ -47,10 +47,7 @@ def api_users():
 
 @app.route("/api/calculate", methods=["POST"])
 def api_calculate():
-    """
-    Validates user inputs and calculates BMI, returning numerical value,
-    category, theme color, and health message.
-    """
+    """Validates user inputs and calculates BMI."""
     data = request.get_json() or {}
     username_str = data.get("username", "")
     weight_str = str(data.get("weight", ""))
@@ -109,7 +106,7 @@ def api_save():
 
 @app.route("/api/history/<username>", methods=["GET"])
 def api_history(username):
-    """Retrieves all historical BMI entries for a specific user."""
+    """Retrieves all historical BMI entries for a single user."""
     clean_username = username.strip()
     if not clean_username:
         return jsonify({"success": False, "error": "Username is required."}), 400
@@ -117,6 +114,25 @@ def api_history(username):
     try:
         records = get_user_history(clean_username, db_path=DEFAULT_DB_PATH)
         return jsonify({"success": True, "username": clean_username, "records": records})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/multi-history", methods=["POST"])
+def api_multi_history():
+    """Retrieves historical BMI entries for multiple users for comparative graphing."""
+    data = request.get_json() or {}
+    usernames = data.get("usernames", [])
+    clean_usernames = [u.strip() for u in usernames if u and u.strip()]
+
+    if not clean_usernames:
+        return jsonify({"success": False, "error": "At least one username must be provided."}), 400
+
+    results = {}
+    try:
+        for u in clean_usernames:
+            results[u] = get_user_history(u, db_path=DEFAULT_DB_PATH)
+        return jsonify({"success": True, "results": results})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -154,10 +170,7 @@ if __name__ == "__main__":
     print("\n========================================================")
     print(" ⚖️ BMI Calculator & Health Tracker - Localhost Web Server")
     print(" Running on: http://localhost:5000/")
-    print(" Press Ctrl+C to stop the server.")
     print("========================================================\n")
 
-    # Automatically open browser after 1 second
     Timer(1.2, open_browser).start()
-
     app.run(host="0.0.0.0", port=5000, debug=True)
